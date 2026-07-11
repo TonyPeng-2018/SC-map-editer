@@ -30,6 +30,11 @@ def main():
     zH, zP, zS = EUDVariable(0), EUDVariable(0), EUDVariable(0)
     tH, tP, tS = EUDVariable(0), EUDVariable(0), EUDVariable(0)
     hx, hy = EUDVariable(0), EUDVariable(0)
+    # gameplay clocks (base-map triggers don't run under EUD, so waves/income/
+    # boss are driven here)
+    incTick, waveTick, bossFlag = EUDVariable(0), EUDVariable(0), EUDVariable(0)
+    gameSec = EUDVariable(0)
+    secTick = EUDVariable(0)
 
     if EUDInfLoop()():
         # --- one-time init: make Amon a real tanky boss ---
@@ -69,6 +74,46 @@ def main():
             for uid in PLAYER_UNITS:
                 TrgUnit(uid).armor += 1
             DisplayTextAll("\x07[EUD] Your forces harden: +1 armor to all units.\n")
+        EUDEndIf()
+
+        # ===== GAMEPLAY (driven by EUD since base triggers don't run here) =====
+        secTick += 1
+        if EUDIf()(secTick >= 24):          # one game-second
+            secTick << 0
+            gameSec += 1
+            DoActions([SetResources(Player1, Add, 5, Ore),
+                       SetResources(Player2, Add, 5, Ore)])
+        EUDEndIf()
+
+        # waves: every ~24s a batch attacks both bases (enemies get tankier via
+        # the per-minute stat scaling above)
+        waveTick += 1
+        if EUDIf()(waveTick >= 24 * 24):
+            waveTick << 0
+            DoActions([
+                CreateUnit(8, 37, "Amon Spawn N", Player3),
+                Order(37, Player3, "Amon Spawn N", 14, "Tychus Base"),
+                CreateUnit(4, 38, "Amon Spawn N", Player3),
+                Order(38, Player3, "Amon Spawn N", 14, "Tychus Base"),
+                CreateUnit(8, 37, "Amon Spawn S", Player3),
+                Order(37, Player3, "Amon Spawn S", 14, "Zeratul Base"),
+                CreateUnit(4, 38, "Amon Spawn S", Player3),
+                Order(38, Player3, "Amon Spawn S", 14, "Zeratul Base"),
+            ])
+            DisplayTextAll("\x08Amon's forces attack!\n")
+        EUDEndIf()
+
+        # Amon boss (Torrasque) enters at 5:00
+        if EUDIf()([gameSec >= 300, bossFlag == 0]):
+            bossFlag << 1
+            DoActions([
+                CreateUnit(1, TORRASQUE, "Amon Spawn N", Player3),
+                Order(TORRASQUE, Player3, "Amon Spawn N", 14, "Tychus Base"),
+                CreateUnit(1, TORRASQUE, "Amon Spawn S", Player3),
+                Order(TORRASQUE, Player3, "Amon Spawn S", 14, "Zeratul Base"),
+                MinimapPing("Amon Spawn N"),
+            ])
+            DisplayTextAll("\x13\x08AMON has entered the battlefield!\n")
         EUDEndIf()
 
         # --- passive auto-heal: +20 HP/sec; Zeratul regens shields when HP full ---
