@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Test / build artifacts
+tests/_out_*.scx
+tests/_out_*.scm
+*.chk
+
+# Map files are never committed (they are third-party copyrighted content).
+# Examples reference the user's own local copy by path.
+*.scx
+*.scm
+
+# OS
+.DS_Store
+Thumbs.db

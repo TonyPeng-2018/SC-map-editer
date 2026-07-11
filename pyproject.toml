@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-scmap"
+version = "0.1.0"
+description = "Read, understand and edit StarCraft: Brood War maps (.scx/.scm) from Python — pure-Python, zero dependencies."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+keywords = ["starcraft", "brood war", "scx", "scm", "chk", "mpq", "map editor", "scmdraft"]
+dependencies = []   # pure standard library by design
+
+[project.scripts]
+scmap = "engine.cli:main"
+
+[tool.setuptools]
+packages = ["engine"]
