@@ -35,6 +35,7 @@ def main():
             tor.maxHp = 2000 * 256        # 600 -> 2000 HP
             tor.armor = 10                # heavy armor
             TrgUnit(JIM_RAYNOR).maxHp = 350 * 256   # Tychus -> 350 HP
+            Weapon(0).cooldown = 8        # Gauss Rifle: permanent post-Stim attack speed
             # guarantee starting economy via EUD (independent of map triggers)
             DoActions([
                 SetResources(Player1, SetTo, 300, Ore),
@@ -92,6 +93,20 @@ def main():
                     EUDEndIf()
                 EUDEndIf()
         EUDEndIf()
+
+        # --- ABILITY INPUT PROOF: Zeratul + Hold Position => ability 1 ---
+        # (proves the "detect a command on the hero -> run custom effect" system;
+        #  once confirmed, Hold/Patrol/Stop map to Zeratul's 3 abilities.)
+        HOLD, GUARD = 107, 2
+        for zptr, zepd in EUDLoopPlayerUnit(0):     # Player1 = Zeratul
+            z = CUnit(zepd, ptr=zptr)
+            if EUDIf()(z.unitType == ZERATUL):
+                if EUDIf()(z.order == HOLD):
+                    z.order = GUARD                 # consume the order (fire once)
+                    DisplayTextAll("\x07Zeratul ABILITY 1 fired (Hold Position)! +500 minerals\n")
+                    DoActions(SetResources(Player1, Add, 500, Ore))
+                EUDEndIf()
+            EUDEndIf()
 
         EUDDoEvents()
     EUDEndInfLoop()

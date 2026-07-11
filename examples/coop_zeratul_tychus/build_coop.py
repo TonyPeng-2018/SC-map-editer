@@ -47,7 +47,8 @@ def main():
                if u['uid'] in (176, 177, 178) and u['x'] // 32 < 16 and u['y'] // 32 >= 64]
 
     m.units.remove_where(lambda u: u['uid'] != 214)
-    m.enable_all_tech()
+    # (abilities are custom EUD skills on the heroes, not native tech spells, so
+    # we DON'T enable all tech -- that added junk buttons like Stim + black boxes.)
     m.scale_build_times(0.5)   # halve construction / build times
 
     # players / forces
