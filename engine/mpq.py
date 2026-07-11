@@ -183,22 +183,33 @@ class MPQArchive:
 def build(files, out_path=None, sector_shift=3):
     """Build a fresh MPQ from ``files`` (dict name->bytes).
 
-    Blocks are stored SINGLE_UNIT, uncompressed, unencrypted -- maximally
-    compatible. Returns the archive bytes; also writes to ``out_path`` if given.
+    Files are stored as MULTI-SECTOR, uncompressed, unencrypted blocks -- the
+    same storage shape real StarCraft maps use (StarCraft's loader does not
+    accept the newer SINGLE_UNIT flag, which would hang it at "loading 0%").
+    Returns the archive bytes; also writes to ``out_path`` if given.
     """
     HDR = 32
     htcount = 16
     while htcount < len(files) * 2:
         htcount <<= 1
+    sector_size = 512 << sector_shift
 
     blob = bytearray()
     blocks = []
     cur = HDR
     for name, content in files.items():
         content = bytes(content)
-        blob += content
-        blocks.append((name, cur, len(content), len(content), F_EXISTS | F_SINGLE))
-        cur += len(content)
+        fsize = len(content)
+        nsec = max(1, (fsize + sector_size - 1) // sector_size)
+        # sector offset table: nsec+1 entries, relative to block start
+        offsets = [(nsec + 1) * 4]
+        for i in range(nsec):
+            seclen = min(sector_size, fsize - i * sector_size)
+            offsets.append(offsets[-1] + max(0, seclen))
+        block = struct.pack('<%dI' % (nsec + 1), *offsets) + content
+        blob += block
+        blocks.append((name, cur, len(block), fsize, F_EXISTS))
+        cur += len(block)
 
     ht = bytearray(b'\xff' * (htcount * 16))
     for idx, (name, boff, arch, fsize, flags) in enumerate(blocks):
