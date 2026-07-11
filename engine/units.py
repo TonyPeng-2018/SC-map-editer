@@ -56,6 +56,8 @@ UNIT_NAMES = {
     197: "Zerg Flag Beacon", 198: "Terran Flag Beacon", 199: "Protoss Flag Beacon",
     214: "Start Location", 215: "Flag", 216: "Young Chrysalis", 217: "Psi Emitter",
     218: "Data Disc", 219: "Khaydarin Crystal", 228: "Map Revealer",
+    # special condition groups (usable in Command/Bring/Deaths conditions)
+    229: "Any Unit", 230: "Men", 231: "Buildings", 232: "Factories",
 }
 # name -> id (first spelling wins; also accept a few friendly aliases)
 NAME_TO_ID = {v: k for k, v in UNIT_NAMES.items()}

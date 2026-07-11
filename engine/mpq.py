@@ -201,14 +201,28 @@ def build(files, out_path=None, sector_shift=3):
         content = bytes(content)
         fsize = len(content)
         nsec = max(1, (fsize + sector_size - 1) // sector_size)
-        # sector offset table: nsec+1 entries, relative to block start
-        offsets = [(nsec + 1) * 4]
+        # Compress each sector with zlib (mask 0x02), exactly like shipped maps.
+        # Store a sector raw when compression doesn't shrink it; StarCraft then
+        # detects raw sectors by "stored size == sector size".
+        sectors = []
         for i in range(nsec):
-            seclen = min(sector_size, fsize - i * sector_size)
-            offsets.append(offsets[-1] + max(0, seclen))
-        block = struct.pack('<%dI' % (nsec + 1), *offsets) + content
+            raw = content[i * sector_size:(i + 1) * sector_size]
+            comp = b'\x02' + zlib.compress(raw, 9)
+            sectors.append(comp if len(comp) < len(raw) else raw)
+        offsets = [(nsec + 1) * 4]
+        for s in sectors:
+            offsets.append(offsets[-1] + len(s))
+        table = struct.pack('<%dI' % (nsec + 1), *offsets)
+        # Encrypt with a file key derived from the base name + block offset + size
+        # (FIX_KEY), exactly like real maps: table with key-1, sector i with key+i.
+        basename = name.split('\\')[-1]
+        key = ((_hash(basename, 'TABLE') + cur) ^ fsize) & 0xFFFFFFFF
+        block = _encrypt(table, (key - 1) & 0xFFFFFFFF)
+        for i, s in enumerate(sectors):
+            block += _encrypt(s, (key + i) & 0xFFFFFFFF)
         blob += block
-        blocks.append((name, cur, len(block), fsize, F_EXISTS))
+        blocks.append((name, cur, len(block), fsize,
+                       F_EXISTS | F_COMPRESS | F_ENCRYPTED | F_FIXKEY))
         cur += len(block)
 
     ht = bytearray(b'\xff' * (htcount * 16))
