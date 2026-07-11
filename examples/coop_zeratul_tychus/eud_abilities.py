@@ -40,6 +40,7 @@ def main():
             tor.armor = 10                # heavy armor
             TrgUnit(JIM_RAYNOR).maxHp = 350 * 256   # Tychus -> 350 HP
             Weapon(0).cooldown = 8        # Gauss Rifle: permanent post-Stim attack speed
+            TrgUnit(77).maxHp = 300 * 256           # Fenix(Zealot) = Zeratul's summon, 300 HP
             # guarantee starting economy via EUD (independent of map triggers)
             DoActions([
                 SetResources(Player1, SetTo, 300, Ore),
@@ -139,8 +140,11 @@ def main():
                 EUDEndIf()
                 if EUDIf()([z.order == STOP, zS == 0]):
                     z.order = GUARD; zS << CD
-                    DisplayTextAll("\x0fZeratul: Void Surge - allies restored!\n")
-                    surge_heal(0)
+                    DisplayTextAll("\x0fZeratul: Summon Void Warrior!\n")
+                    DoActions([
+                        MoveLocation("SummonLoc", 75, Player1, "AllMap"),
+                        CreateUnit(1, 77, "SummonLoc", Player1),   # Fenix(Zealot) 300 HP
+                    ])
                 EUDEndIf()
             EUDEndIf()
 
@@ -163,8 +167,11 @@ def main():
                 EUDEndIf()
                 if EUDIf()([t.order == STOP, tS == 0]):
                     t.order = GUARD; tS << CD
-                    DisplayTextAll("\x08Tychus: Rally - allies restored!\n")
-                    surge_heal(1)
+                    DisplayTextAll("\x08Tychus: Deploy Turret!\n")
+                    DoActions([
+                        MoveLocation("TurretLoc", 20, Player2, "AllMap"),
+                        CreateUnit(1, 124, "TurretLoc", Player2),   # Missile Turret
+                    ])
                 EUDEndIf()
             EUDEndIf()
 

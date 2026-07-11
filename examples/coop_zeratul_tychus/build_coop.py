@@ -145,6 +145,10 @@ def main():
     # map halves, so idle enemies get pushed toward the nearer player
     L_north = m.add_location('North Half', 0, 0, 128 * 32, 48 * 32)
     L_south = m.add_location('South Half', 0, 48 * 32, 128 * 32, 96 * 32)
+    # helper locations for EUD create-at-hero abilities (moved onto heroes at runtime)
+    m.add_point_location('SummonLoc', 60, 40, 1)
+    m.add_point_location('TurretLoc', 60, 40, 1)
+    m.add_location('AllMap', 0, 0, 128 * 32, 96 * 32)
 
     # ---- triggers ----
     tb = TriggerBuilder()
