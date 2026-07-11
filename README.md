@@ -80,7 +80,9 @@ m.save("MyMap_out.scx")
 | `engine/blast.py` | PKWARE DCL *explode* (from-scratch port of Mark Adler's `blast.c`) so compressed maps read. |
 | `engine/chk.py`   | CHK section parse/rebuild + the `STR ` string table (index-preserving, dedup on write). |
 | `engine/triggers.py` | Decode/edit `TRIG`; in-place field edits keep untouched triggers byte-identical. `rescale_time()`. |
-| `engine/scmap.py` | High-level `SCMap`: `open`, `translate`, `rescale_time`, `find_korean_strings`, `save`. |
+| `engine/triggerbuild.py` | **Author** triggers from scratch — `TriggerBuilder` + `C.*` conditions + `A.*` actions (byte layouts copied from shipped maps). |
+| `engine/units.py` | Unit id⇄name table (incl. heroes) + `UnitSection` to place/remove preplaced units. |
+| `engine/scmap.py` | High-level `SCMap`: `open`, `translate`, `rescale_time`, `set_player`, `set_forces`, `add_point_location`, `add_string`, `units`, `append_triggers`, `save`. |
 | `engine/cli.py`   | `python -m engine.cli …` |
 
 ## Worked example: *Survival In Mars*
@@ -105,13 +107,28 @@ The map's decoded mechanics (documented in the example):
 - **Victory** at `ElapsedTime ≥ 4200 s` by evacuating an SCV to the center — the
   value `rescale_time(0.35)` rewrites to `1470 s`.
 
+## Worked example 2: SC2-style co-op (generated from scratch)
+
+`examples/coop_zeratul_tychus/` **generates a complete, playable 2-player co-op
+map in Python** — no GUI editor. Two allied commanders (Zeratul, Protoss, and
+Tychus, Terran) defend against ten escalating Zerg waves on a Big Game Hunters
+base, with income, hero abilities via beacons, a boss, and win/lose logic.
+
+```bash
+python examples/coop_zeratul_tychus/build_coop.py
+# built 22 triggers, 267 units -> Mars Coop - Zeratul & Tychus.scx
+```
+
+This exercises the full authoring side of the engine: `set_player`, `set_forces`,
+`add_point_location`, `units.add`, and `TriggerBuilder`. (Structurally verified;
+in-game playtest checklist in the example's README.)
+
 ## Roadmap
 
 - Optional **StormLib** fallback backend, auto-used only for exotic/protected
   maps our pure-Python reader can't handle (keeps zero-install as default).
-- Richer CHK section models (units, upgrades, forces) for full editing.
-- **Phase 2 — SC2-style co-op** map generator (e.g. Zeratul / Tychus commanders)
-  built on the trigger-generation engine.
+- Richer CHK section models (upgrades, tech, unit settings) for full editing.
+- Co-op v2: hero revive, commander leveling, enemy AI scripts, more abilities.
 
 ## Credits & references
 

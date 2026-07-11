@@ -75,6 +75,29 @@ the repo root (`python -m engine.cli ...`) or import `from engine import SCMap`.
 See `examples/survival_in_mars/` for a complete worked example (translate +
 shorten a 70-minute Korean survival map into a 25-minute English one).
 
+## Authoring new content (units, triggers, whole maps)
+
+Beyond editing, the engine can *author* content on a terrain base:
+
+```python
+from engine import SCMap
+from engine.triggerbuild import TriggerBuilder, C, A
+m = SCMap.open("base.scm")
+m.set_player(2, owner="Computer", race="Zerg")
+loc = m.add_point_location("Spawn", 115, 9, 2)
+m.units.add("Zeratul (Dark Templar)", 12*32, 7*32, owner=0)
+tb = TriggerBuilder()
+tb.add(["Player3"], [C.elapsed("AtLeast", 60)],
+       [A.create_unit("Player3", "Zergling", 6, loc), A.preserve()])
+m.append_triggers(tb.serialize())
+m.save("out.scx")
+```
+
+`examples/coop_zeratul_tychus/` generates a full SC2-style 2-player co-op map
+this way. Generated triggers/units are byte-verified against shipped maps, but
+**runtime behaviour (alliances, AI aggression, ability timing, balance) must be
+playtested by the user** — note this when delivering a generated map.
+
 ## Guardrails
 
 - Always keep the original file; write to a new filename.
