@@ -105,12 +105,10 @@ def main():
     place_unit(20, 8, 5, 1)                 # Tychus (Jim Raynor Marine)
     place_unit(28, 11, 4, 1, air=True)      # Hyperion (Battlecruiser) - Yamato snipe
     place_unit(2, 7, 5, 1)                  # Vulture - Spider Mine grenade
-    place_unit(34, 9, 5, 1, energy=100)     # Medic - auto heal
-    for i in range(3):
-        place_unit(0, 6 + i, 4, 1)          # Marines
-    place_unit(32, 6, 5, 1)                 # Firebat
-    for i in range(3):
-        place_unit(7, 4, 6 + i, 1)          # SCVs
+    place_unit(34, 9, 5, 1, energy=100)     # Medic
+    place_unit(0, 6, 4, 1)                  # 1 Marine
+    for i in range(2):
+        place_unit(7, 4, 6 + i, 1)          # 2 SCVs
 
     # ---- Zeratul (Protoss) base, bottom-left ----
     _owner_ctx[0] = 0
@@ -125,13 +123,10 @@ def main():
     place_unit(75, 9, 83, 0)                # Zeratul - cloaked assassin
     place_unit(86, 12, 83, 0, air=True)     # Arbiter (Danimoth) - Recall teleport
     place_unit(67, 11, 84, 0, energy=100)   # High Templar - Psi Storm = whirlwind
+    place_unit(61, 7, 83, 0)                # 1 Dark Templar
+    place_unit(66, 13, 84, 0)               # 1 Dragoon
     for i in range(2):
-        place_unit(61, 7 + i, 83, 0)        # Dark Templar
-    for i in range(2):
-        place_unit(66, 13 + i, 84, 0)       # Dragoon
-    place_unit(65, 10, 84, 0)               # Zealot
-    for i in range(3):
-        place_unit(64, 6 + i, 90, 0)        # Probes
+        place_unit(64, 6 + i, 90, 0)        # 2 Probes
 
     # ---- locations ----
     L_tyc = m.add_point_location('Tychus Base', 8, 7, 4)     # north-west player
