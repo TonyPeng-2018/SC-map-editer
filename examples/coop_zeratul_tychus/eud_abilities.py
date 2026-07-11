@@ -26,6 +26,10 @@ def main():
     tick = EUDVariable(0)
     healTick = EUDVariable(0)
     buffTick = EUDVariable(0)
+    # ability cooldowns (frames) + hero position snapshot
+    zH, zP, zS = EUDVariable(0), EUDVariable(0), EUDVariable(0)
+    tH, tP, tS = EUDVariable(0), EUDVariable(0), EUDVariable(0)
+    hx, hy = EUDVariable(0), EUDVariable(0)
 
     if EUDInfLoop()():
         # --- one-time init: make Amon a real tanky boss ---
@@ -94,17 +98,73 @@ def main():
                 EUDEndIf()
         EUDEndIf()
 
-        # --- ABILITY INPUT PROOF: Zeratul + Hold Position => ability 1 ---
-        # (proves the "detect a command on the hero -> run custom effect" system;
-        #  once confirmed, Hold/Patrol/Stop map to Zeratul's 3 abilities.)
-        HOLD, GUARD = 107, 2
-        for zptr, zepd in EUDLoopPlayerUnit(0):     # Player1 = Zeratul
+        # ===== HERO ACTIVE ABILITIES (H = self, Patrol = targeted, Stop = self) =====
+        HOLD, PATROL, STOP, GUARD = 107, 152, 1, 2
+        CD, R = 96, 96          # ~4s cooldown, 3-tile radius
+
+        for cdv in (zH, zP, zS, tH, tP, tS):
+            if EUDIf()(cdv >= 1):
+                cdv -= 1
+            EUDEndIf()
+
+        def aoe(px, py, dmg, foe=2):
+            # damage enemies inside the (px,py) +/- R box (leaves the boss alive)
+            for eptr, eepd in EUDLoopPlayerUnit(foe):
+                e = CUnit(eepd, ptr=eptr)
+                if EUDIf()([e.posX >= px - R, e.posX <= px + R,
+                            e.posY >= py - R, e.posY <= py + R, e.hp >= dmg + 256]):
+                    e.hp -= dmg
+                EUDEndIf()
+
+        def surge_heal(playerIdx):
+            for uptr, uepd in EUDLoopPlayerUnit(playerIdx):
+                u = CUnit(uepd, ptr=uptr)
+                u.hp += 200 * 256
+
+        # ---- Zeratul (Player1): Whirlwind / Blink / Void Surge ----
+        for zptr, zepd in EUDLoopPlayerUnit(0):
             z = CUnit(zepd, ptr=zptr)
             if EUDIf()(z.unitType == ZERATUL):
-                if EUDIf()(z.order == HOLD):
-                    z.order = GUARD                 # consume the order (fire once)
-                    DisplayTextAll("\x07Zeratul ABILITY 1 fired (Hold Position)! +500 minerals\n")
-                    DoActions(SetResources(Player1, Add, 500, Ore))
+                if EUDIf()([z.order == HOLD, zH == 0]):
+                    z.order = GUARD; zH << CD
+                    hx << z.posX; hy << z.posY
+                    DisplayTextAll("\x0fZeratul: Whirlwind!\n")
+                    aoe(hx, hy, 120 * 256)
+                EUDEndIf()
+                if EUDIf()([z.order == PATROL, zP == 0]):
+                    zP << CD
+                    hx << z.moveTargetX; hy << z.moveTargetY
+                    z.posX = hx; z.posY = hy; z.order = GUARD
+                    DisplayTextAll("\x0fZeratul: Blink!\n")
+                EUDEndIf()
+                if EUDIf()([z.order == STOP, zS == 0]):
+                    z.order = GUARD; zS << CD
+                    DisplayTextAll("\x0fZeratul: Void Surge - allies restored!\n")
+                    surge_heal(0)
+                EUDEndIf()
+            EUDEndIf()
+
+        # ---- Tychus (Player2): Grenade / Snipe / Rally ----
+        for tptr, tepd in EUDLoopPlayerUnit(1):
+            t = CUnit(tepd, ptr=tptr)
+            if EUDIf()(t.unitType == JIM_RAYNOR):
+                if EUDIf()([t.order == HOLD, tH == 0]):
+                    t.order = GUARD; tH << CD
+                    hx << t.posX; hy << t.posY
+                    DisplayTextAll("\x08Tychus: Grenade!\n")
+                    aoe(hx, hy, 160 * 256)
+                EUDEndIf()
+                if EUDIf()([t.order == PATROL, tP == 0]):
+                    tP << CD
+                    hx << t.moveTargetX; hy << t.moveTargetY
+                    t.order = GUARD
+                    DisplayTextAll("\x08Tychus: Snipe!\n")
+                    aoe(hx, hy, 500 * 256)      # heavy damage at the target point
+                EUDEndIf()
+                if EUDIf()([t.order == STOP, tS == 0]):
+                    t.order = GUARD; tS << CD
+                    DisplayTextAll("\x08Tychus: Rally - allies restored!\n")
+                    surge_heal(1)
                 EUDEndIf()
             EUDEndIf()
 
