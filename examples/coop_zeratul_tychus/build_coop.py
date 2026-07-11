@@ -133,16 +133,18 @@ def main():
         place_unit(64, 6 + i, 90, 0)        # Probes
 
     # ---- locations ----
-    L_tyc = m.add_point_location('Tychus Base', 8, 7, 4)
-    L_zer = m.add_point_location('Zeratul Base', 9, 85, 4)
+    L_tyc = m.add_point_location('Tychus Base', 8, 7, 4)     # north-west player
+    L_zer = m.add_point_location('Zeratul Base', 9, 85, 4)   # south-west player
     L_rally = m.add_point_location('Battlefront', 55, 45, 4)
-    L_s1 = m.add_point_location('Amon Spawn N', 108, 8, 3)
-    L_s2 = m.add_point_location('Amon Spawn S', 100, 83, 3)
-    L_s3 = m.add_point_location('Amon Spawn E', 113, 33, 3)
-    L_boss = m.add_point_location('Amon Gate', 62, 40, 4)
+    L_s_tyc = m.add_point_location('Amon Spawn N', 110, 8, 3)   # feeds the Tychus lane
+    L_s_zer = m.add_point_location('Amon Spawn S', 100, 83, 3)  # feeds the Zeratul lane
+    L_bn = m.add_point_location('Amon Gate N', 100, 15, 3)   # boss gate feeding Tychus
+    L_bs = m.add_point_location('Amon Gate S', 100, 75, 3)   # boss gate feeding Zeratul
     L_shard = m.add_point_location('Void Shard', 50, 24, 3)
     L_turret = m.add_point_location('Turret Post', 40, 40, 2)
-    SPAWNS = [L_s1, L_s2, L_s3]
+    # map halves, so idle enemies get pushed toward the nearer player
+    L_north = m.add_location('North Half', 0, 0, 128 * 32, 48 * 32)
+    L_south = m.add_location('South Half', 0, 48 * 32, 128 * 32, 96 * 32)
 
     # ---- triggers ----
     tb = TriggerBuilder()
@@ -160,9 +162,11 @@ def main():
     tb.add([ENEMY], [C.always()], [A.set_deaths(ENEMY, AGGRO, 'Add', 1), A.preserve()])
     tb.add([TYC], [C.always()], [A.set_deaths(TYC, HEALCD, 'Add', 1),
                                  A.set_deaths(TYC, TURRETCD, 'Add', 1), A.preserve()])
-    # aggressive AI: relentlessly push the battlefront
+    # aggressive AI: push northern enemies at Tychus, southern enemies at Zeratul,
+    # so BOTH players are always under pressure (not one funnel point).
     tb.add([ENEMY], [C.deaths(ENEMY, 'AtLeast', 80, AGGRO)],
-           [A.order(ENEMY, ANY_UNIT, ANYWHERE, L_rally, 2),
+           [A.order(ENEMY, ANY_UNIT, L_north, L_tyc, 2),
+            A.order(ENEMY, ANY_UNIT, L_south, L_zer, 2),
             A.set_deaths(ENEMY, AGGRO, 'SetTo', 0), A.preserve()])
     # Tychus auto-heal
     tb.add([TYC], [C.deaths(TYC, 'AtLeast', 45, HEALCD)],
@@ -181,20 +185,31 @@ def main():
         (840, [('Hydralisk', 6), ('Dragoon', 3)]), (1050, [('Ultralisk', 3), ('Mutalisk', 4)]),
     ]
     for t, comp in WAVES:
-        acts = [A.minimap_ping(L_rally)]
+        # each wave hits BOTH players: a group at the Tychus lane and the Zeratul lane
+        acts = [A.minimap_ping(L_tyc), A.minimap_ping(L_zer)]
         for unit, cnt in comp:
-            for loc in SPAWNS:
-                acts.append(A.create_unit(ENEMY, unit, cnt, loc))
-                acts.append(A.order(ENEMY, unit, loc, L_rally, 2))
+            acts.append(A.create_unit(ENEMY, unit, cnt, L_s_tyc))
+            acts.append(A.order(ENEMY, unit, L_s_tyc, L_tyc, 2))
+            acts.append(A.create_unit(ENEMY, unit, cnt, L_s_zer))
+            acts.append(A.order(ENEMY, unit, L_s_zer, L_zer, 2))
         tb.add([ENEMY], [C.elapsed('AtLeast', t)], acts[:64])
 
     def boss_wave(n_tor, extra, msg):
-        acts = [A.display_text(msg), A.minimap_ping(L_boss)]
-        acts.append(A.create_unit(ENEMY, TOR, n_tor, L_boss))
-        acts.append(A.order(ENEMY, TOR, L_boss, L_rally, 2))
+        # split the boss force: north gate -> Tychus, south gate -> Zeratul,
+        # so Amon pressures BOTH commanders each phase.
+        acts = [A.display_text(msg), A.minimap_ping(L_bn), A.minimap_ping(L_bs)]
+        def spawn(unit, cnt):
+            n = (cnt + 1) // 2
+            s = cnt // 2
+            if n:
+                acts.append(A.create_unit(ENEMY, unit, n, L_bn))
+                acts.append(A.order(ENEMY, unit, L_bn, L_tyc, 2))
+            if s:
+                acts.append(A.create_unit(ENEMY, unit, s, L_bs))
+                acts.append(A.order(ENEMY, unit, L_bs, L_zer, 2))
+        spawn(TOR, n_tor)
         for unit, cnt in extra:
-            acts.append(A.create_unit(ENEMY, unit, cnt, L_boss))
-            acts.append(A.order(ENEMY, unit, L_boss, L_rally, 2))
+            spawn(unit, cnt)
         return acts
 
     s_p1 = m.add_string('\x13\x08AMON - PHASE 1 has manifested! Destroy it before 10:00.')
