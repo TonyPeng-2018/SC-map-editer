@@ -2,12 +2,11 @@
 """Generate a 2-player SC2-style co-op map (Zeratul & Tychus vs Amon) on the
 Mar Sara (Ashworld) terrain, entirely from Python via the claude-scmap engine.
 
-    python examples/coop_zeratul_tychus/build_coop.py
+Players hold the top-left; Amon attacks from the right. Light macro + hero
+squads with NATIVE spellcaster abilities (no beacons). Ten escalating waves,
+then a boss. Heroes revive; you lose only when all your buildings are gone.
 
-Layout matches the base map's natural geography: the two commanders hold the
-top-left (a Terran and a Protoss base site), Amon's forces pour in from the
-right. Light macro (income + one production building each) plus hero micro, ten
-escalating waves, then a boss.
+    python examples/coop_zeratul_tychus/build_coop.py
 """
 import os, sys, struct
 
@@ -21,7 +20,11 @@ BASE = r'G:/Documents/StarCraft/Maps/Download/Mar Sara 1-5 (2P).scm'
 OUT = r'G:/Documents/StarCraft/Maps/Download/Mars Coop - Zeratul vs Amon.scx'
 
 ZER, TYC, ENEMY = 'Player1', 'Player2', 'Player3'
-COUNTER = 13  # Spider Mine death-count = a pure cooldown counter
+NEUTRAL = 11            # resource owner
+AGGRO = 13             # Spider Mine death-count = enemy re-order clock
+ANYWHERE = 64          # Mar Sara's full-map location index
+ANY_UNIT = 229         # special condition/order group
+BUILDINGS = 231        # special "Buildings" group (for the lose check)
 
 # waves: (time_s, [(unit, count_per_spawn)], announce). Amon = corrupted Zerg+Protoss.
 WAVES = [
@@ -46,10 +49,9 @@ def T(tx, ty):
 def main():
     m = SCMap.open(BASE)
 
-    # ---- wipe the campaign's preplaced units, keep resources + start locations
-    removed = m.units.remove_where(
-        lambda u: u['uid'] not in (176, 177, 178, 188, 214))
-    print('removed %d campaign units (kept resources/starts)' % removed)
+    # ---- wipe ALL campaign units incl. resources; keep only start locations ----
+    removed = m.units.remove_where(lambda u: u['uid'] != 214)
+    print('removed %d campaign units (incl. old resources)' % removed)
 
     # ---- players / races / forces ----
     m.set_player(0, owner='Human', race='Protoss')   # Zeratul
@@ -61,50 +63,57 @@ def main():
                  names={0: 'Survivors', 1: "Amon's Forces"},
                  flags={0: 0x0E, 1: 0x00})
 
-    # ---- locations (tiles). Players top-left, Amon right. ----
-    L_zer   = m.add_point_location('Zeratul Base', 28, 8, 3)
-    L_tyc   = m.add_point_location('Tychus Base', 16, 8, 3)
-    L_front = m.add_point_location('Front Line', 46, 20, 3)
-    L_s1    = m.add_point_location('Spawn North', 115, 8, 2)
-    L_s2    = m.add_point_location('Spawn South', 115, 55, 2)
-    L_s3    = m.add_point_location('Spawn East', 120, 30, 2)
-    L_zbeac = m.add_point_location('Void Beacon', 32, 10, 1)
-    L_tbeac = m.add_point_location('Drop Beacon', 20, 10, 1)
-    L_strike = m.add_point_location('Strike Point', 60, 20, 3)
-    L_boss  = m.add_point_location('Boss Arena', 90, 30, 4)
+    # ---- locations (all on campaign-verified walkable tiles) ----
+    L_zer   = m.add_point_location('Zeratul Base', 32, 9, 3)
+    L_tyc   = m.add_point_location('Tychus Base', 12, 9, 3)
+    L_front = m.add_point_location('Front Line', 40, 18, 3)   # players' doorstep
+    L_s1    = m.add_point_location('Spawn North', 110, 13, 2)  # old P8 nexus area
+    L_s2    = m.add_point_location('Spawn South', 110, 84, 2)  # old P6 nexus area
+    L_s3    = m.add_point_location('Spawn East', 113, 33, 2)   # old P8 forge area
+    L_boss  = m.add_point_location('Boss Arena', 58, 38, 4)    # old central hive
     SPAWNS = [L_s1, L_s2, L_s3]
 
     U = m.units
-    # give each commander a little starting economy (minerals near base)
-    for i in range(6):
-        U.add(176, *T(24 + i % 3, 3 + i // 3), owner=11, resource=1500)  # near Zeratul
-        U.add(176, *T(11 + i % 3, 3 + i // 3), owner=11, resource=1500)  # near Tychus
 
-    # Zeratul (Protoss) base -- top-left
-    U.add('Nexus', *T(28, 8), owner=0)
-    U.add('Zeratul (Dark Templar)', *T(30, 9), owner=0)
-    for i in range(4): U.add('Probe', *T(26 + i, 6), owner=0)
-    U.add('Pylon', *T(29, 7), owner=0); U.add('Gateway', *T(31, 7), owner=0)
-    for i in range(2): U.add('Dark Templar', *T(31 + i, 10), owner=0)
-    for i in range(2): U.add('Dragoon', *T(29 + i, 11), owner=0)
-    U.add('Zealot', *T(32, 11), owner=0)
-    U.add('Photon Cannon', *T(34, 12), owner=0)
-    U.add('Protoss Beacon', *T(32, 10), owner=0)
+    # ---- clean economy: minerals + a geyser near each base (owner = neutral) ----
+    for i in range(8):
+        U.add(176, *T(4 + i, 2), owner=NEUTRAL, resource=1500)    # Tychus minerals
+        U.add(176, *T(27 + i, 2), owner=NEUTRAL, resource=1500)   # Zeratul minerals
+    U.add('Vespene Geyser', *T(13, 3), owner=NEUTRAL, resource=5000)
+    U.add('Vespene Geyser', *T(36, 3), owner=NEUTRAL, resource=5000)
 
-    # Tychus (Terran) base -- top-left
-    U.add('Command Center', *T(16, 8), owner=1)
-    U.add('Jim Raynor (Marine)', *T(18, 9), owner=1)  # Tychus
-    for i in range(3): U.add('SCV', *T(14 + i, 6), owner=1)
-    U.add('Supply Depot', *T(15, 11), owner=1); U.add('Barracks', *T(18, 7), owner=1)
-    for i in range(3): U.add('Marine', *T(19 + i, 9), owner=1)
-    U.add('Firebat', *T(19, 10), owner=1); U.add('Medic', *T(20, 10), owner=1)
-    U.add('Bunker', *T(21, 8), owner=1)
-    U.add('Terran Beacon', *T(20, 10), owner=1)
+    # ---- Tychus (Terran) base, top-left, spaced buildings ----
+    U.add('Command Center', *T(9, 7), owner=1)
+    U.add('Barracks', *T(16, 7), owner=1)
+    U.add('Supply Depot', *T(9, 12), owner=1)
+    U.add('Engineering Bay', *T(15, 12), owner=1)
+    U.add('Bunker', *T(22, 10), owner=1)
+    U.add('Jim Raynor (Marine)', *T(12, 9), owner=1)             # Tychus
+    U.add('Ghost', *T(11, 10), owner=1, energy=100)              # Lockdown
+    U.add('Science Vessel', *T(10, 8), owner=1, energy=100)      # Defensive Matrix / Irradiate
+    U.add('Medic', *T(13, 10), owner=1, energy=100)
+    for i in range(3): U.add('Marine', *T(13 + i, 11), owner=1)
+    U.add('Firebat', *T(12, 11), owner=1)
+    for i in range(3): U.add('SCV', *T(6 + i, 9), owner=1)
+
+    # ---- Zeratul (Protoss) base, top-left, spaced buildings ----
+    U.add('Nexus', *T(30, 7), owner=0)
+    U.add('Gateway', *T(37, 7), owner=0)
+    U.add('Pylon', *T(30, 12), owner=0)
+    U.add('Forge', *T(37, 12), owner=0)
+    U.add('Photon Cannon', *T(34, 10), owner=0)
+    U.add('Zeratul (Dark Templar)', *T(33, 9), owner=0)          # cloaked assassin
+    U.add('High Templar', *T(36, 9), owner=0, energy=100)        # Psionic Storm
+    U.add('Dark Archon', *T(31, 9), owner=0, energy=100)         # Maelstrom / Feedback
+    for i in range(2): U.add('Dark Templar', *T(34 + i, 8), owner=0)
+    for i in range(2): U.add('Dragoon', *T(31 + i, 10), owner=0)
+    U.add('Zealot', *T(33, 10), owner=0)
+    for i in range(3): U.add('Probe', *T(27 + i, 10), owner=0)
 
     # ---- triggers ----
     tb = TriggerBuilder()
     s_obj = m.add_string('\x04Mars Co-op vs Amon: survive 10 waves, then kill the boss.\r\n'
-                         '\x04P1 Zeratul (Void Beacon) | P2 Tychus (Drop Beacon)')
+                         '\x04Heroes revive. You lose only when all buildings fall.')
     s_intro = m.add_string('\x0cMars Co-op: Zeratul & Tychus vs Amon. Hold the west!')
     tb.add([ZER], [C.always()], [
         A.set_resources(ZER, 'SetTo', 250), A.set_resources(TYC, 'SetTo', 250),
@@ -112,11 +121,16 @@ def main():
     ])
     # hyper trigger keeps recurring triggers snappy
     tb.add([ENEMY], [C.always()], [A.wait(0)] * 12 + [A.preserve()])
-    # cooldown clock + income drip
-    tb.add([ZER], [C.always()], [A.set_deaths(ZER, COUNTER, 'Add', 1), A.preserve()])
-    tb.add([TYC], [C.always()], [A.set_deaths(TYC, COUNTER, 'Add', 1), A.preserve()])
+    # income drip
     tb.add([ZER], [C.always()], [A.set_resources(ZER, 'Add', 3), A.preserve()])
     tb.add([TYC], [C.always()], [A.set_resources(TYC, 'Add', 3), A.preserve()])
+
+    # aggressive AI: tick a clock, and every ~15 ticks re-order ALL Amon units to
+    # attack-move the front line, so they relentlessly push into the players.
+    tb.add([ENEMY], [C.always()], [A.set_deaths(ENEMY, AGGRO, 'Add', 1), A.preserve()])
+    tb.add([ENEMY], [C.deaths(ENEMY, 'AtLeast', 90, AGGRO)],
+           [A.order(ENEMY, ANY_UNIT, ANYWHERE, L_front, order_type=2),
+            A.set_deaths(ENEMY, AGGRO, 'SetTo', 0), A.preserve()])
 
     # waves (one-shot each)
     for t, comp, msg in WAVES:
@@ -137,28 +151,10 @@ def main():
         A.create_unit(ENEMY, 'Hydralisk', 8, L_boss),
         A.order(ENEMY, 'Torrasque (Ultralisk)', L_boss, L_front, 2),
         A.order(ENEMY, 'Infested Kerrigan', L_boss, L_front, 2),
-        A.order(ENEMY, 'Hydralisk', L_boss, L_front, 2),
         A.set_switch(1, 'set'),
     ])
 
-    # Zeratul ability: Void Strike (~30s cd)
-    s_void = m.add_string('\x0cZeratul: Void Strike! Dark Templar deployed.')
-    tb.add([ZER],
-           [C.bring(ZER, 'AtLeast', 1, 'Zeratul (Dark Templar)', L_zbeac),
-            C.deaths(ZER, 'AtLeast', 15, COUNTER)],
-           [A.display_text(s_void), A.create_unit(ZER, 'Dark Templar', 3, L_strike),
-            A.minimap_ping(L_strike), A.set_deaths(ZER, COUNTER, 'SetTo', 0), A.preserve()])
-
-    # Tychus ability: Reinforce Drop (~30s cd)
-    s_drop = m.add_string('\x0cTychus: Outlaws drop in! Reinforcements arrive.')
-    tb.add([TYC],
-           [C.bring(TYC, 'AtLeast', 1, 'Jim Raynor (Marine)', L_tbeac),
-            C.deaths(TYC, 'AtLeast', 15, COUNTER)],
-           [A.display_text(s_drop), A.create_unit(TYC, 'Marine', 4, L_tbeac),
-            A.create_unit(TYC, 'Medic', 1, L_tbeac),
-            A.set_deaths(TYC, COUNTER, 'SetTo', 0), A.preserve()])
-
-    # hero revive: on death, reconstitute at base after ~12s (heroes are not lost)
+    # hero revive (~12s at base)
     s_rz = m.add_string('\x0cZeratul reconstitutes from the void...')
     tb.add([ZER], [C.deaths(ZER, 'AtLeast', 1, 'Zeratul (Dark Templar)')],
            [A.display_text(s_rz), A.wait(12000),
@@ -170,16 +166,14 @@ def main():
             A.create_unit(TYC, 'Jim Raynor (Marine)', 1, L_tyc),
             A.set_deaths(TYC, 'Jim Raynor (Marine)', 'SetTo', 0), A.preserve()])
 
-    # win: boss (Torrasque) killed after it spawned
+    # win / lose
     s_win = m.add_string("\x0cAmon's assault is broken. Mars is safe. Victory!")
     tb.add(['Force1'],
            [C.switch(1, 'set'), C.deaths(ENEMY, 'AtLeast', 1, 'Torrasque (Ultralisk)')],
            [A.display_text(s_win), A.victory()])
-
-    # lose: the allied force has no buildings left (unit id 231 = "Buildings")
     s_lose = m.add_string('\x08All structures destroyed. Mars is lost...')
     tb.add(['Force1'],
-           [C.elapsed('AtLeast', 8), C.command('Force1', 'AtMost', 0, 231)],
+           [C.elapsed('AtLeast', 8), C.command('Force1', 'AtMost', 0, BUILDINGS)],
            [A.display_text(s_lose), A.defeat()])
 
     m.set_triggers(tb.serialize())
@@ -192,7 +186,6 @@ def main():
 
     m.save(OUT)
     print('built %d triggers, %d units -> %s' % (len(tb), len(U), OUT))
-
     m2 = SCMap.open(OUT)
     print('reopen name:', m2.name, '| triggers:', m2.trigger_count,
           '| OWNR:', list(m2.chk.get('OWNR'))[:4], '| SIDE:', list(m2.chk.get('SIDE'))[:4])

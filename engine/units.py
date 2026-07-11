@@ -128,9 +128,10 @@ class UnitSection:
         self.records = keep
         return removed
 
-    def add(self, uid, x, y, owner, hp=100, resource=0, serial=None):
+    def add(self, uid, x, y, owner, hp=100, resource=0, energy=0, serial=None):
         """Append a preplaced unit. x/y are pixel coordinates. Byte layout copies
-        exactly what shipped maps write, so StarCraft loads it verbatim."""
+        exactly what shipped maps write, so StarCraft loads it verbatim.
+        ``energy`` (0-100) lets preplaced spellcasters start charged."""
         uid = unit_id(uid)
         if serial is None:
             serial = len(self.records)
@@ -138,6 +139,8 @@ class UnitSection:
         valid = VALID_OWNER | VALID_HP
         if resource:
             valid |= VALID_RESOURCE
+        if energy:
+            valid |= VALID_ENERGY
         rec = struct.pack(
             '<IHHHHHHBBBBIHHII',
             serial & 0xFFFFFFFF,  # 0  class instance serial
@@ -147,7 +150,7 @@ class UnitSection:
             special,              # 12 special properties word
             valid,                # 14 valid-elements flags
             owner,                # 16 owner
-            hp, 0, 0,             # 17 hp%, 18 shield%, 19 energy%
+            hp, 0, energy,        # 17 hp%, 18 shield%, 19 energy%
             resource,             # 20 resource amount
             0,                    # 24 units in hangar
             0,                    # 26 unit state flags
