@@ -182,7 +182,8 @@ def main():
 
     # escalating waves (one-shot) -- bigger and tankier over time
     WAVES = [
-        (20,  [('Zergling', 10)]),
+        (2,   [('Zergling', 8)]),
+        (45,  [('Zergling', 10)]),
         (80,  [('Zergling', 12), ('Hydralisk', 5)]),
         (150, [('Hydralisk', 10), ('Zergling', 8)]),
         (240, [('Mutalisk', 6), ('Hydralisk', 8)]),

@@ -17,6 +17,7 @@ LoadMap(TMP)
 
 TORRASQUE = 48
 JIM_RAYNOR = 20
+ZERATUL = 75
 ENEMY = [37, 38, 39, 43, 44, 45, 46, 47]  # zerg wave units
 # player armies (Protoss = Zeratul side, Terran = Tychus side)
 PLAYER_UNITS = [61, 62, 63, 65, 66, 67, 68, 75, 86,   # protoss
@@ -65,7 +66,7 @@ def main():
             DisplayTextAll("\x07[EUD] Your forces harden: +1 armor to all units.\n")
         EUDEndIf()
 
-        # --- Tychus auto-heal: +20 HP per second, toward his max HP ---
+        # --- passive auto-heal: +20 HP/sec; Zeratul regens shields when HP full ---
         healTick += 1
         if EUDIf()(healTick >= 24):     # ~1 second at fastest speed
             healTick << 0
@@ -75,6 +76,20 @@ def main():
                 if EUDIf()(u.unitType == JIM_RAYNOR):
                     if EUDIf()(u.hp < raynorMax):
                         u.hp += 20 * 256    # +20 HP/sec
+                    EUDEndIf()
+                EUDEndIf()
+            zerHp = TrgUnit(ZERATUL).maxHp
+            zerSh = TrgUnit(ZERATUL).maxShield
+            for uptr, uepd in EUDLoopPlayerUnit(0):     # Player1 = Zeratul
+                u = CUnit(uepd, ptr=uptr)
+                if EUDIf()(u.unitType == ZERATUL):
+                    if EUDIf()(u.hp < zerHp):
+                        u.hp += 20 * 256
+                    EUDEndIf()
+                    if EUDIf()(u.hp >= zerHp):       # HP full -> regen shields
+                        if EUDIf()(u.shield < zerSh):
+                            u.shield += 20 * 256
+                        EUDEndIf()
                     EUDEndIf()
                 EUDEndIf()
         EUDEndIf()
