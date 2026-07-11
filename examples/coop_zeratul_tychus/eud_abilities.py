@@ -7,13 +7,11 @@
 import os, shutil
 from eudplib import *
 
-SRC = r'G:/Documents/StarCraft/Maps/Download/Mars Coop - Zeratul vs Amon.scx'
-TMP = r'C:/Users/tonypeng/AppData/Local/Temp/claude/G--Documents-StarCraft-Maps-Download/ad41515a-2359-4f64-9e6b-ba2c148a3379/scratchpad/coop_base.scx'
+SRC = r'C:/Users/tonypeng/AppData/Local/Temp/claude/G--Documents-StarCraft-Maps-Download/ad41515a-2359-4f64-9e6b-ba2c148a3379/scratchpad/coop_base.scx'
 OUT = r'G:/Documents/StarCraft/Maps/Download/Mars Coop EUD.scx'
-shutil.copy(SRC, TMP)
 
 CompressPayload(True)
-LoadMap(TMP)
+LoadMap(SRC)
 
 TORRASQUE = 48
 JIM_RAYNOR = 20
@@ -36,6 +34,7 @@ def main():
             tor = TrgUnit(TORRASQUE)
             tor.maxHp = 2000 * 256        # 600 -> 2000 HP
             tor.armor = 10                # heavy armor
+            TrgUnit(JIM_RAYNOR).maxHp = 350 * 256   # Tychus -> 350 HP
             # guarantee starting economy via EUD (independent of map triggers)
             DoActions([
                 SetResources(Player1, SetTo, 300, Ore),
@@ -75,7 +74,7 @@ def main():
                 u = CUnit(uepd, ptr=uptr)
                 if EUDIf()(u.unitType == JIM_RAYNOR):
                     if EUDIf()(u.hp < raynorMax):
-                        u.hp += 20 * 256    # +20 HP/sec
+                        u.hp += 30 * 256    # +30 HP/sec
                     EUDEndIf()
                 EUDEndIf()
             zerHp = TrgUnit(ZERATUL).maxHp

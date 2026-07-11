@@ -19,7 +19,9 @@ from engine.triggerbuild import TriggerBuilder, C, A
 from engine.units import unit_id
 
 BASE = r'G:/Documents/StarCraft/Maps/Download/Mar Sara 1-5 (2P).scm'
-OUT = r'G:/Documents/StarCraft/Maps/Download/Mars Coop - Zeratul vs Amon.scx'
+# intermediate base map (EUD layer is added by eud_abilities.py); kept out of the
+# Maps folder so only the final EUD map lives there.
+OUT = r'C:/Users/tonypeng/AppData/Local/Temp/claude/G--Documents-StarCraft-Maps-Download/ad41515a-2359-4f64-9e6b-ba2c148a3379/scratchpad/coop_base.scx'
 
 ZER, TYC, ENEMY = 'Player1', 'Player2', 'Player3'
 NEUTRAL = 11
