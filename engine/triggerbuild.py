@@ -208,6 +208,17 @@ class A:
     def set_mission_objectives(string_id):
         return _act(12, string=string_id)
 
+    @staticmethod
+    def modify_unit_hp(player, unit, percent, loc, count=0):
+        # count 0 = all matching units; percent is the new HP %
+        return _act(49, location=loc, player=_group(player), number=percent,
+                    unit=unit_id(unit), modifier=count, flags=0x14)
+
+    @staticmethod
+    def set_invincibility(player, unit, loc, on=True):
+        return _act(43, location=loc, player=_group(player), unit=unit_id(unit),
+                    modifier=4 if on else 5, flags=0x14)
+
 
 class TriggerBuilder:
     def __init__(self):

@@ -200,6 +200,17 @@ class SCMap:
         r = radius_tiles * 32
         return self.add_location(name, cx - r, cy - r, cx + r, cy + r)
 
+    # ------------------------------------------------------------------- tech
+    def enable_all_tech(self):
+        """Unlock every special ability (tech) as available + already-researched
+        for all players. PTEC/PTEx are flag arrays (available/researched/uses-
+        default per player+tech); filling them with 0x01 turns everything on, so
+        preplaced spellcasters can cast immediately in Use-Map-Settings games."""
+        for sec in ('PTEC', 'PTEx'):
+            data = self.chk.get(sec)
+            if data:
+                self.chk.set(sec, b'\x01' * len(data))
+
     # ----------------------------------------------------------------- triggers
     def append_triggers(self, trig_bytes):
         payload = self.chk.get('TRIG') or b''
