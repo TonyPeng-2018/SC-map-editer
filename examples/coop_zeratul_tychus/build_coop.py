@@ -26,7 +26,7 @@ NEUTRAL = 11
 ANYWHERE = 64
 ANY_UNIT = 229
 BUILDINGS = 231
-AGGRO, HEALCD, TURRETCD = 13, 33, 14   # dummy unit death-counters used as clocks
+AGGRO, HEALCD, TURRETCD, PINGCD = 13, 33, 14, 30   # dummy death-counters used as clocks
 TOR = 'Torrasque (Ultralisk)'
 
 
@@ -46,6 +46,7 @@ def main():
 
     m.units.remove_where(lambda u: u['uid'] != 214)
     m.enable_all_tech()
+    m.scale_build_times(0.5)   # halve construction / build times
 
     # players / forces
     m.set_player(0, owner='Human', race='Protoss')
@@ -140,6 +141,7 @@ def main():
     L_s_zer = m.add_point_location('Amon Spawn S', 100, 83, 3)  # feeds the Zeratul lane
     L_bn = m.add_point_location('Amon Gate N', 100, 15, 3)   # boss gate feeding Tychus
     L_bs = m.add_point_location('Amon Gate S', 100, 75, 3)   # boss gate feeding Zeratul
+    L_amon = m.add_point_location('AMON', 62, 40, 2)          # tracking marker (follows Amon)
     L_shard = m.add_point_location('Void Shard', 50, 24, 3)
     L_turret = m.add_point_location('Turret Post', 40, 40, 2)
     # map halves, so idle enemies get pushed toward the nearer player
@@ -159,9 +161,15 @@ def main():
     tb.add([ENEMY], [C.always()], [A.wait(0)] * 12 + [A.preserve()])          # hyper
     tb.add([ZER], [C.always()], [A.set_resources(ZER, 'Add', 4), A.preserve()])  # income
     tb.add([TYC], [C.always()], [A.set_resources(TYC, 'Add', 4), A.preserve()])
-    tb.add([ENEMY], [C.always()], [A.set_deaths(ENEMY, AGGRO, 'Add', 1), A.preserve()])
+    tb.add([ENEMY], [C.always()], [A.set_deaths(ENEMY, AGGRO, 'Add', 1),
+                                   A.set_deaths(ENEMY, PINGCD, 'Add', 1), A.preserve()])
     tb.add([TYC], [C.always()], [A.set_deaths(TYC, HEALCD, 'Add', 1),
                                  A.set_deaths(TYC, TURRETCD, 'Add', 1), A.preserve()])
+    # AMON locator: keep a minimap ping following the living Amon (Torrasque),
+    # so players can always see where the boss is and go kill it.
+    tb.add([ENEMY], [C.command(ENEMY, 'AtLeast', 1, TOR), C.deaths(ENEMY, 'AtLeast', 18, PINGCD)],
+           [A.move_location(ENEMY, ANYWHERE, L_amon, TOR),
+            A.minimap_ping(L_amon), A.set_deaths(ENEMY, PINGCD, 'SetTo', 0), A.preserve()])
     # aggressive AI: push northern enemies at Tychus, southern enemies at Zeratul,
     # so BOTH players are always under pressure (not one funnel point).
     tb.add([ENEMY], [C.deaths(ENEMY, 'AtLeast', 80, AGGRO)],
@@ -177,12 +185,18 @@ def main():
            [A.create_unit(TYC, 124, 1, L_turret),          # Missile Turret
             A.set_deaths(TYC, TURRETCD, 'SetTo', 0), A.preserve()])
 
-    # escalating waves (one-shot)
+    # escalating waves (one-shot) -- bigger and tankier over time
     WAVES = [
-        (30,  [('Zergling', 6)]), (120, [('Zergling', 8), ('Hydralisk', 3)]),
-        (210, [('Hydralisk', 6)]), (360, [('Mutalisk', 4), ('Zergling', 6)]),
-        (480, [('Hydralisk', 6), ('Zealot', 3)]), (660, [('Ultralisk', 3)]),
-        (840, [('Hydralisk', 6), ('Dragoon', 3)]), (1050, [('Ultralisk', 3), ('Mutalisk', 4)]),
+        (20,  [('Zergling', 10)]),
+        (80,  [('Zergling', 12), ('Hydralisk', 5)]),
+        (150, [('Hydralisk', 10), ('Zergling', 8)]),
+        (240, [('Mutalisk', 6), ('Hydralisk', 8)]),
+        (340, [('Hydralisk', 10), ('Zealot', 6)]),
+        (450, [('Ultralisk', 4), ('Hydralisk', 8)]),
+        (560, [('Ultralisk', 4), ('Dragoon', 6), ('Hydralisk', 8)]),
+        (700, [('Ultralisk', 5), ('Mutalisk', 8), ('Hydralisk', 10)]),
+        (850, [('Ultralisk', 6), ('Guardian', 4), ('Hydralisk', 12)]),
+        (1000, [('Ultralisk', 6), ('Guardian', 5), ('Mutalisk', 8), ('Hydralisk', 10)]),
     ]
     for t, comp in WAVES:
         # each wave hits BOTH players: a group at the Tychus lane and the Zeratul lane
@@ -194,46 +208,42 @@ def main():
             acts.append(A.order(ENEMY, unit, L_s_zer, L_zer, 2))
         tb.add([ENEMY], [C.elapsed('AtLeast', t)], acts[:64])
 
-    def boss_wave(n_tor, extra, msg):
-        # split the boss force: north gate -> Tychus, south gate -> Zeratul,
-        # so Amon pressures BOTH commanders each phase.
-        acts = [A.display_text(msg), A.minimap_ping(L_bn), A.minimap_ping(L_bs)]
-        def spawn(unit, cnt):
-            n = (cnt + 1) // 2
-            s = cnt // 2
-            if n:
-                acts.append(A.create_unit(ENEMY, unit, n, L_bn))
-                acts.append(A.order(ENEMY, unit, L_bn, L_tyc, 2))
-            if s:
-                acts.append(A.create_unit(ENEMY, unit, s, L_bs))
-                acts.append(A.order(ENEMY, unit, L_bs, L_zer, 2))
-        spawn(TOR, n_tor)
+    def amon_phase(gate, extra, msg):
+        # ONE clearly-visible Amon (Torrasque) at 'gate' -> attacks center; a
+        # tracking ping (above) follows it. Escort splits to both lanes.
+        acts = [A.display_text(msg), A.minimap_ping(gate), A.center_view(gate),
+                A.create_unit(ENEMY, TOR, 1, gate), A.order(ENEMY, TOR, gate, L_rally, 2)]
         for unit, cnt in extra:
-            spawn(unit, cnt)
-        return acts
+            n, s = (cnt + 1) // 2, cnt // 2
+            if n:
+                acts += [A.create_unit(ENEMY, unit, n, L_bn), A.order(ENEMY, unit, L_bn, L_tyc, 2)]
+            if s:
+                acts += [A.create_unit(ENEMY, unit, s, L_bs), A.order(ENEMY, unit, L_bs, L_zer, 2)]
+        return acts[:64]
 
-    s_p1 = m.add_string('\x13\x08AMON - PHASE 1 has manifested! Destroy it before 10:00.')
-    tb.add([ENEMY], [C.elapsed('AtLeast', 300)],
-           boss_wave(1, [('Hydralisk', 6)], s_p1))
-    # phase 2 gate at 10:00
     s_fail = m.add_string('\x13\x08You failed to destroy Amon in time. Mars is lost...')
+    # Phase 1 @ 5:00
+    s_p1 = m.add_string('\x13\x08AMON has manifested (see the ping)! Destroy it before 10:00.')
+    tb.add([ENEMY], [C.elapsed('AtLeast', 300)],
+           amon_phase(L_bn, [('Hydralisk', 6), ('Zergling', 8)], s_p1))
+    # Phase 2 gate @ 10:00
     tb.add(['Force1'], [C.elapsed('AtLeast', 600), C.deaths(ENEMY, 'AtMost', 0, TOR)],
            [A.display_text(s_fail), A.defeat()])
-    s_p2 = m.add_string('\x13\x08AMON evolves - PHASE 2: tougher and deadlier. Kill it by 15:00.')
+    s_p2 = m.add_string('\x13\x08AMON evolves - PHASE 2, deadlier! Kill it by 15:00.')
     tb.add([ENEMY], [C.elapsed('AtLeast', 600), C.deaths(ENEMY, 'AtLeast', 1, TOR)],
-           boss_wave(3, [('Infested Kerrigan', 1), ('Hydralisk', 8), ('Ultralisk', 2)], s_p2))
-    # phase 3 gate at 15:00
-    tb.add(['Force1'], [C.elapsed('AtLeast', 900), C.deaths(ENEMY, 'AtMost', 3, TOR)],
+           amon_phase(L_bs, [('Hydralisk', 10), ('Ultralisk', 3), ('Mutalisk', 4)], s_p2))
+    # Phase 3 gate @ 15:00
+    tb.add(['Force1'], [C.elapsed('AtLeast', 900), C.deaths(ENEMY, 'AtMost', 1, TOR)],
            [A.display_text(s_fail), A.defeat()])
-    s_p3 = m.add_string('\x13\x08AMON - FINAL FORM! Destroy it before 20:00 to win!')
-    tb.add([ENEMY], [C.elapsed('AtLeast', 900), C.deaths(ENEMY, 'AtLeast', 4, TOR)],
-           boss_wave(5, [('Infested Kerrigan', 2), ('Ultralisk', 3), ('Mutalisk', 5)], s_p3))
-    # final deadline 20:00
-    tb.add(['Force1'], [C.elapsed('AtLeast', 1200), C.deaths(ENEMY, 'AtMost', 8, TOR)],
+    s_p3 = m.add_string('\x13\x08AMON - FINAL FORM! Destroy it before 20:00 to WIN!')
+    tb.add([ENEMY], [C.elapsed('AtLeast', 900), C.deaths(ENEMY, 'AtLeast', 2, TOR)],
+           amon_phase(L_bn, [('Ultralisk', 5), ('Guardian', 4), ('Hydralisk', 10)], s_p3))
+    # final deadline @ 20:00
+    tb.add(['Force1'], [C.elapsed('AtLeast', 1200), C.deaths(ENEMY, 'AtMost', 2, TOR)],
            [A.display_text(s_fail), A.defeat()])
-    # WIN
+    # WIN: all three Amon forms destroyed
     s_win = m.add_string('\x0cAMON is destroyed. Mars is saved. VICTORY!')
-    tb.add(['Force1'], [C.deaths(ENEMY, 'AtLeast', 9, TOR)],
+    tb.add(['Force1'], [C.deaths(ENEMY, 'AtLeast', 3, TOR)],
            [A.display_text(s_win), A.victory()])
 
     # hero revive (~12s)

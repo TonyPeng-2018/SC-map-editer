@@ -200,6 +200,24 @@ class SCMap:
         r = radius_tiles * 32
         return self.add_location(name, cx - r, cy - r, cx + r, cy + r)
 
+    # -------------------------------------------------------------- unit stats
+    def scale_build_times(self, factor):
+        """Multiply every unit's build time by ``factor`` (e.g. 0.5 = half).
+        UNIS/UNIx layout: useDefault u8[228]@0 ... buildTime u16[228]@1824. The
+        sections already hold the real default stats, so we flip useDefault off
+        and scale only the build-time field."""
+        for sec in ('UNIS', 'UNIx'):
+            data = self.chk.get(sec)
+            if not data or len(data) < 1824 + 228 * 2:
+                continue
+            d = bytearray(data)
+            for i in range(228):
+                d[i] = 0  # use custom (already-default) values so buildTime applies
+                off = 1824 + i * 2
+                bt = struct.unpack_from('<H', d, off)[0]
+                struct.pack_into('<H', d, off, max(1, int(bt * factor)) & 0xFFFF)
+            self.chk.set(sec, bytes(d))
+
     # ------------------------------------------------------------------- tech
     def enable_all_tech(self):
         """Unlock every special ability (tech) as available + already-researched
